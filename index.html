@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>普拉文章上傳助手</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #f9fafb;
+        padding: 20px;
+        color: #333;
+      }
+      h1 {
+        color: #1d4ed8;
+      }
+      h2 {
+        margin-top: 30px;
+        color: #1d4ed8;
+      }
+      .section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .drop-zone {
+        border: 2px dashed #1d4ed8;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        color: #555;
+        margin: 20px 0;
+        background: #f0f9ff;
+        cursor: pointer;
+      }
+      canvas {
+        border: 1px solid #ccc;
+        margin: 10px;
+        max-width: 100%;
+      }
+      .options label {
+        margin-right: 20px;
+        cursor: pointer;
+      }
+      textarea {
+        width: 100%;
+        height: 140px;
+        font-size: 14px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .textarea-block {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 15px;
+      }
+      .btn {
+        padding: 8px 14px;
+        margin: 5px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .blue-btn {
+        background: #1d4ed8;
+        color: #fff;
+      }
+      .yellow-btn {
+        background: #fde047;
+        color: #000;
+      }
+      .pulse {
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(29, 78, 216, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(29, 78, 216, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(29, 78, 216, 0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>普拉文章上傳助手</h1>
+
+    <!-- API Key -->
+    <div class="section">
+      <label>🔑 OpenAI API Key：</label>
+      <input
+        type="password"
+        id="apiKey"
+        placeholder="輸入你的 API Key"
+        style="width: 300px; padding: 5px"
+      />
+      <button class="btn yellow-btn" id="saveKey">儲存</button>
+      <button class="btn yellow-btn" id="loadKey">載入</button>
+      <button class="btn yellow-btn" id="toggleKey">顯示/隱藏</button>
+    </div>
+
+    <!-- 文章翻譯助手 -->
+    <div class="section">
+      <h2>文章翻譯助手</h2>
+      <textarea id="inputText" placeholder="輸入繁體中文文章"></textarea>
+      <div>
+        <button class="btn blue-btn pulse" id="translateSimplifiedBtn">
+          翻譯成簡體
+        </button>
+        <button class="btn blue-btn pulse" id="translateEnglishBtn">
+          翻譯成英文
+        </button>
+      </div>
+      <div class="textarea-block">
+        <textarea id="simplifiedText" placeholder="簡體翻譯結果"></textarea>
+        <button class="btn yellow-btn" onclick="copyText('simplifiedText')">
+          Copy
+        </button>
+      </div>
+      <div class="textarea-block">
+        <textarea id="englishText" placeholder="英文翻譯結果"></textarea>
+        <button class="btn yellow-btn" onclick="copyText('englishText')">
+          Copy
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // ====== API Key 管理 ======
+      const apiKeyInput = document.getElementById("apiKey");
+
+      document.getElementById("saveKey").addEventListener("click", () => {
+        localStorage.setItem("openai_api_key", apiKeyInput.value.trim());
+        alert("✅ API Key 已儲存");
+      });
+
+      document.getElementById("loadKey").addEventListener("click", () => {
+        const key = localStorage.getItem("openai_api_key");
+        if (key) {
+          apiKeyInput.value = key;
+          alert("✅ 已載入儲存的 API Key");
+        } else {
+          alert("⚠️ 沒有儲存的 API Key");
+        }
+      });
+
+      document.getElementById("toggleKey").addEventListener("click", () => {
+        apiKeyInput.type =
+          apiKeyInput.type === "password" ? "text" : "password";
+      });
+
+      // ====== 翻譯助手 (分開請求) ======
+      async function translate(text, target, lang) {
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+          alert("請輸入 API Key");
+          return;
+        }
+        if (!text) {
+          alert("請輸入文字");
+          return;
+        }
+
+        target.value = "⏳ 翻譯中...";
+
+        try {
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-4.1",
+                messages: [
+                  { role: "system", content: "You are a translator." },
+                  {
+                    role: "user",
+                    content:
+                      lang === "zh"
+                        ? `請將以下繁體中文翻譯成簡體中文，直接輸出文字內容：\n${text}`
+                        : `請將以下繁體中文翻譯成自然流暢的英文，直接輸出文字內容：\n${text}`,
+                  },
+                ],
+              }),
+            }
+          );
+
+          const data = await response.json();
+          if (data.error) {
+            alert("⚠️ API 錯誤: " + data.error.message);
+            target.value = "";
+            return;
+          }
+          target.value =
+            data.choices?.[0]?.message?.content?.trim() || "⚠️ 翻譯失敗";
+        } catch (err) {
+          alert("⚠️ 請求錯誤: " + err.message);
+          target.value = "";
+        }
+      }
+
+      document
+        .getElementById("translateSimplifiedBtn")
+        .addEventListener("click", () => {
+          const text = document.getElementById("inputText").value.trim();
+          const simplifiedText = document.getElementById("simplifiedText");
+          translate(text, simplifiedText, "zh");
+        });
+
+      document
+        .getElementById("translateEnglishBtn")
+        .addEventListener("click", () => {
+          const text = document.getElementById("inputText").value.trim();
+          const englishText = document.getElementById("englishText");
+          translate(text, englishText, "en");
+        });
+
+      // ====== Copy 功能 ======
+      function copyText(id) {
+        const el = document.getElementById(id);
+        el.select();
+        document.execCommand("copy");
+        alert("已複製內容");
+      }
+    </script>
+  </body>
+</html>
